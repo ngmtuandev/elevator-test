@@ -38,7 +38,7 @@ public class ElevatorServiceImplement implements IElevatorService {
             this.elevatorRepository.save(newElevator);
             return new ResponseBase(ResourceBundleConstant.ELEVATOR_01, getMessageBundle(ResourceBundleConstant.ELEVATOR_01), SystemConstant.STATUS_CODE_SUCCESS);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            return new ResponseBase(ResourceBundleConstant.ELEVATOR_04, getMessageBundle(ResourceBundleConstant.ELEVATOR_04), SystemConstant.STATUS_CODE_BAD_REQUEST);
         }
     }
 

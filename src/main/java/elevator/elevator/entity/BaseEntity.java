@@ -15,8 +15,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @Data
-@Builder
-public abstract class BaseEntity {
+abstract class BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,6 +30,5 @@ public abstract class BaseEntity {
 
     @Column(nullable = false)
     private boolean deleted = false;
-
 
 }
