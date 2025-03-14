@@ -3,10 +3,7 @@ package elevator.elevator.entity;
 import elevator.elevator.configurations.enums.EDirection;
 import elevator.elevator.configurations.enums.EStatusElevator;
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,10 +12,14 @@ import java.util.List;
 @Getter
 @Setter
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class ElevatorEntity extends BaseEntity{
 
     private int currentFloor;
+
+    private int position;
 
     @Enumerated(EnumType.STRING)
     private EDirection direction;
@@ -28,10 +29,5 @@ public class ElevatorEntity extends BaseEntity{
 
     @ElementCollection(fetch = FetchType.EAGER)
     private List<Integer> pendingFloors = new ArrayList<>();
-
-    // RELATIONSHIP
-
-    @OneToMany(mappedBy = "elevator", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RequestUserEntity> requests = new ArrayList<>();
 
 }

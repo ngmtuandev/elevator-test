@@ -12,6 +12,8 @@ public class RequestCreateElevator {
 
     private int currentFloor;
 
+    private int position;
+
     private EStatusElevator statusElevator;
 
     private EDirection direction;

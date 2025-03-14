@@ -7,11 +7,14 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 @Builder
-public class ResponseBase {
+public class ResponseBaseWithData {
 
     String code;
 
     String message;
 
     int status;
+
+    Object data;
+
 }
