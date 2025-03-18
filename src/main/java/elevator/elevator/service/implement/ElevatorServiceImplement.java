@@ -12,14 +12,12 @@ import elevator.elevator.utils.BaseAmenityUtil;
 import elevator.elevator.utils.ElevatorNotFoundException;
 import elevator.elevator.utils.ElevatorUtils;
 import elevator.elevator.utils.WebSocketHandler;
+import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -72,6 +70,7 @@ public class ElevatorServiceImplement implements IElevatorService {
     }
 
     @Override
+    @Transactional
     public ResponseBase moveElevators() {
         List<ElevatorEntity> elevators = elevatorRepository.findAll();
         boolean moved = false;
@@ -80,71 +79,70 @@ public class ElevatorServiceImplement implements IElevatorService {
             if (!elevator.getPendingFloors().isEmpty()) {
                 int nextFloor = elevator.getPendingFloors().remove(0);
                 elevator.setCurrentFloor(nextFloor);
-
-                log.info("Thang máy {} được di chuyển tơới tầng {}", elevator.getPosition(), nextFloor);
-                moved = true;
-
-                if (elevator.getPendingFloors().isEmpty()) {
-                    elevator.setStatusElevator(EStatusElevator.IDLE);
-                    elevator.setDirection(EDirection.NONE);
-                }
-
+                elevator.setStatusElevator(EStatusElevator.DOOR_OPENING);
                 elevatorRepository.save(elevator);
+
+                log.info("Thang máy {} đến tầng {}, mở cửa", elevator.getPosition(), nextFloor);
+
+                // Gửi cập nhật qua WebSocket
+                webSocketHandler.broadcastMessage(elevatorRepository.findAll());
+
+                // Giữ cửa mở 5 giây rồi đóng cửa
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        closeDoor(elevator.getId());
+                    }
+                }, 5000);
+
+                moved = true;
             }
         }
 
-        if (!moved) {
-            return new ResponseBase(
-                    ResourceBundleConstant.NO_MOVEMENT,
-                    getMessageBundle(ResourceBundleConstant.NO_MOVEMENT),
-                    SystemConstant.STATUS_CODE_SUCCESS
-            );
-        }
-        if (moved) {
-            webSocketHandler.broadcastMessage(elevatorRepository.findAll());
-        }
-
         return new ResponseBase(
-                ResourceBundleConstant.ELEVATORS_MOVED,
-                getMessageBundle(ResourceBundleConstant.ELEVATORS_MOVED),
+                "ELEVATORS_MOVED",
+                "Thang máy đã di chuyển",
                 SystemConstant.STATUS_CODE_SUCCESS
         );
     }
 
+    @Override
     public ResponseBaseWithData findElevatorNearest(int floor, String direction) {
         List<ElevatorEntity> elevators = elevatorRepository.findAll();
 
-        // Ưu tiên thang máy gần nhất + đúng hướng
+        // Ưu tiên thang máy đã có hướng đi phù hợp
         Optional<ElevatorEntity> bestElevator = elevators.stream()
                 .filter(e -> e.getDirection().name().equals(direction) &&
-                        e.getPendingFloors().contains(floor))
+                        ((direction.equals("UP") && e.getCurrentFloor() <= floor) ||
+                                (direction.equals("DOWN") && e.getCurrentFloor() >= floor)))
                 .min(Comparator.comparingInt(e -> Math.abs(e.getCurrentFloor() - floor)));
 
         if (bestElevator.isPresent()) {
             return new ResponseBaseWithData(
-                    ResourceBundleConstant.ELEVATOR_06,
-                    getMessageBundle(ResourceBundleConstant.ELEVATOR_06),
+                    "ELEVATOR_FOUND",
+                    "Thang máy được tìm thấy",
                     SystemConstant.STATUS_CODE_SUCCESS,
                     bestElevator.get()
             );
         }
 
+        // Nếu không có thang máy nào đúng hướng, tìm thang máy đang IDLE
         Optional<ElevatorEntity> idleElevator = elevators.stream()
                 .filter(e -> e.getStatusElevator() == EStatusElevator.IDLE)
                 .min(Comparator.comparingInt(e -> Math.abs(e.getCurrentFloor() - floor)));
 
         if (idleElevator.isPresent()) {
             return new ResponseBaseWithData(
-                    ResourceBundleConstant.ELEVATOR_06,
-                    getMessageBundle(ResourceBundleConstant.ELEVATOR_06),
+                    "ELEVATOR_IDLE_FOUND",
+                    "Thang máy đang rảnh được chọn",
                     SystemConstant.STATUS_CODE_SUCCESS,
                     idleElevator.get()
             );
         }
 
         return new ResponseBaseWithData(
-                ResourceBundleConstant.ELEVATOR_05,
-                "Không có thang máy trống để phục vụ!",
+                "ELEVATOR_NOT_FOUND",
+                "Không có thang máy phù hợp!",
                 SystemConstant.STATUS_CODE_BAD_REQUEST,
                 null
         );
@@ -173,27 +171,30 @@ public class ElevatorServiceImplement implements IElevatorService {
 
     @Override
     public void openDoor(UUID elevatorId) {
-        ElevatorEntity findElevator = elevatorRepository.findById(elevatorId)
+        ElevatorEntity elevator = elevatorRepository.findById(elevatorId)
                 .orElseThrow(() -> new ElevatorNotFoundException("Thang máy không tồn tại!"));
 
-        elevatorRepository.findById(elevatorId).ifPresent(elevator -> {
-            log.info("Thang máy {} đang mở cửa", findElevator.getPosition());
-            try {
-                Thread.sleep(10000); // 10 giây
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Thang máy {} mowr cửa", findElevator.getPosition(), e);
+        log.info("Thang máy {} đang mở cửa", elevator.getPosition());
+        elevator.setStatusElevator(EStatusElevator.DOOR_OPENING);
+        elevatorRepository.save(elevator);
+
+        // Giữ cửa mở 5 giây rồi đóng cửa
+        new Timer().schedule(new TimerTask() {
+            @Override
+            public void run() {
+                closeDoor(elevatorId);
             }
-        });
+        }, 5000);
     }
 
     @Override
     public void closeDoor(UUID elevatorId) {
-        ElevatorEntity findElevator = elevatorRepository.findById(elevatorId)
+        ElevatorEntity elevator = elevatorRepository.findById(elevatorId)
                 .orElseThrow(() -> new ElevatorNotFoundException("Thang máy không tồn tại!"));
-        elevatorRepository.findById(elevatorId).ifPresent(elevator -> {
-            log.info("Thang máy {} đóng cửa",  findElevator.getPosition());
-        });
+
+        log.info("Thang máy {} đóng cửa", elevator.getPosition());
+        elevator.setStatusElevator(EStatusElevator.IDLE);
+        elevatorRepository.save(elevator);
     }
 
 

@@ -1,5 +1,5 @@
 # Bước 1: Sử dụng image Java làm base image
-FROM openjdk:17-jdk-slim as build
+FROM openjdk:17-jdk-slim AS build
 
 # Bước 2: Cài đặt Maven
 RUN apt-get update && apt-get install -y maven

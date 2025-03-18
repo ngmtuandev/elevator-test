@@ -6,6 +6,8 @@ public enum EStatusElevator {
 
     MOVING,
 
-    STOPPED
+    DOOR_OPENING,
+
+    DOOR_CLOSING
 
 }
